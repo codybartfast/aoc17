@@ -1,6 +1,11 @@
 ﻿open System
 open System.IO
 
+// Day 0
+
+let readLines q = 
+    File.ReadAllLines(sprintf "./inputs/%s.txt" q)
+
 // Day 1
 
 let inverseCaptureA input = 
@@ -41,35 +46,112 @@ let checksumDiff (lines : string[]) =
 let checksumQuotient (lines : string[]) =
     let isDivisor divisor dividend =
         dividend % divisor = 0
-    let rec quotient values =
-        let divisor::rest = values
+    let rec findQuotient divisor rest =
         match List.tryFind (isDivisor divisor) rest with
         | Some m -> m / divisor
-        | _ -> quotient rest
+        | _ -> findQuotient rest.Head rest.Tail
     let lineCrc (line : string) =
         line.Split('\t') 
         |> Array.map (int)
         |> Array.sort
         |> List.ofArray
-        |> quotient
+        |> (fun values -> findQuotient values.Head values.Tail)
     lines
     |> Seq.map lineCrc
     |> Seq.sum
     |> string
   
+// Day 3
+
+let spiralDistance input =
+    let value = int input  
+    let width = 
+        value 
+        |> float |> sqrt |> ceil 
+        |> (*) 0.5 |> int |> (*) 2 |> (+) 1
+    let distToEdge = width / 2
+    let perimeter_count = value - ((width - 2) * (width - 2))
+    let past_centre = (perimeter_count + width / 2) % (max 1 (width - 1))
+    let distAroundEdge = min past_centre (width - past_centre)
+    distToEdge + distAroundEdge
+    |> string
+
+let spiralSums inputText =
+    let right (x, y) = (x + 1, y)
+    let above (x, y) = (x, y + 1)
+    let left (x, y) = (x - 1, y)
+    let below (x, y) = (x, y - 1)
+            
+    let walkPerimeter width =
+        let repeat d n = seq{ for _ in 1..n do yield d}
+        [
+            seq{ yield right };
+            repeat above (width - 2);
+            repeat left (width - 1);
+            repeat below (width - 1);
+            repeat right (width - 1);
+        ] |> Seq.concat
+
+    let spiralMoves () =
+        Seq.initInfinite ((+) 1 >> (*) 2 >> (+) 1)
+        |> Seq.map walkPerimeter
+        |> Seq.concat
+
+    let home = (0, 0)
+    let spiralCoords () =
+        (home, (spiralMoves ()).GetEnumerator())
+        |> Seq.unfold (fun (coord, moves) ->
+            moves.MoveNext() |> ignore         
+            Some (coord, ((moves.Current coord), moves)))                 
+ 
+    let lookupValue spiral (x, y) =
+        spiral
+        |> List.tryFind (fun ((_x, _y), _) ->
+            x = _x && y = _y)
+        |> function
+            | Some ((_, _), n) -> Some n
+            | _ -> None
+              
+    let sumNeighbours squares coord = 
+        let neighbours =
+            [ right; right>>above; above; above>>left; left; left>>below; below; below>>right ]
+            |> List.map (fun f -> f coord)
+        neighbours
+        |> Seq.map (lookupValue squares)
+        |> Seq.map (function Some n -> n | None -> 0)
+        |> Seq.sum
+
+    let first = (home, 1)     
+    let spiralSquares () =
+        let en = (spiralCoords ()).GetEnumerator()
+        en.MoveNext() |> ignore // already have first
+        ([first], en)
+        |> Seq.unfold (fun (spiral, coords) ->
+            coords.MoveNext() |> ignore
+            let nextCoord = coords.Current
+            let nextSquare = (nextCoord, sumNeighbours spiral nextCoord)  
+            Some (List.head spiral, (nextSquare::spiral, coords)))
+            
+
+    let input = int inputText
+
+    spiralSquares ()    
+        |> Seq.map snd
+        |> Seq.find ((<) input)
+        |> string
+
 
 [<EntryPoint>]
 let main argv =
     match argv with
     | [| "1a"; input |] -> inverseCaptureA input
     | [| "1b"; input |] -> inverseCaptureB input
-    | [| "2a" |] -> checksumDiff (File.ReadAllLines("./inputs/2a.txt"))
-    | [| "2b" |] -> checksumQuotient (File.ReadAllLines("./inputs/2b.txt"))
+    | [| "2a" |] -> checksumDiff (readLines "2a")
+    | [| "2b" |] -> checksumQuotient (readLines "2b")
+    | [| "3a"; input |] -> spiralDistance input
+    | [| "3b"; input |] -> spiralSums input
     | _ -> "Merry Christmas from F#!"
     |> printfn "%s"
     Console.ReadLine() |> ignore
     0
-
-
-
 
