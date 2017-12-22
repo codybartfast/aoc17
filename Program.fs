@@ -153,6 +153,29 @@ let anagramFree (lines : string[]) =
     |> string
 
 
+// Day 5
+
+let jumpCount lines stranger =
+    let length = Array.length lines
+    let getNextIndex  = 
+        let instructions = Array.map int lines
+        (fun index -> 
+            let offset = instructions.[index]
+            let next = index + offset
+            let mutation = 
+                match stranger, offset with
+                | (true, _) when offset > 2 -> -1
+                | _ -> 1
+            instructions.[index] <- offset + mutation
+            next)
+    let rec countJumps index count =
+        match 0 <= index && index < length with
+        | true -> countJumps (getNextIndex index) (count + 1)
+        | false -> count
+    countJumps 0 0
+    |> string
+
+
 [<EntryPoint>]
 let main argv =
     match argv with
@@ -164,6 +187,8 @@ let main argv =
     | [| "3b"; input |] -> spiralSums input
     | [| "4a" |] -> validPassphrases (readLines "4a")
     | [| "4b" |] -> anagramFree (readLines "4a")
+    | [| "5a" |] -> jumpCount (readLines "5a") false
+    | [| "5b" |] -> jumpCount (readLines "5a") true
     | _ -> "Merry Christmas from F#!"
     |> printfn "%s"
     Console.ReadLine() |> ignore
