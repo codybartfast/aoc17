@@ -6,6 +6,7 @@ open System.IO
 let readLines q = 
     File.ReadAllLines(sprintf "./inputs/%s.txt" q)
 
+
 // Day 1
 
 let inverseCaptureA input = 
@@ -31,6 +32,7 @@ let inverseCaptureB input =
     |> Seq.sum
     |> (*) 2.0
     |> string
+
 
 // Day 2
 
@@ -61,6 +63,7 @@ let checksumQuotient (lines : string[]) =
     |> Seq.sum
     |> string
   
+
 // Day 3
 
 let spiralDistance input =
@@ -80,8 +83,7 @@ let spiralSums inputText =
     let right (x, y) = (x + 1, y)
     let above (x, y) = (x, y + 1)
     let left (x, y) = (x - 1, y)
-    let below (x, y) = (x, y - 1)
-            
+    let below (x, y) = (x, y - 1)          
     let walkPerimeter width =
         let repeat d n = seq{ for _ in 1..n do yield d}
         [
@@ -91,27 +93,23 @@ let spiralSums inputText =
             repeat below (width - 1);
             repeat right (width - 1);
         ] |> Seq.concat
-
     let spiralMoves () =
         Seq.initInfinite ((+) 1 >> (*) 2 >> (+) 1)
         |> Seq.map walkPerimeter
         |> Seq.concat
-
     let home = (0, 0)
     let spiralCoords () =
         (home, (spiralMoves ()).GetEnumerator())
         |> Seq.unfold (fun (coord, moves) ->
             moves.MoveNext() |> ignore         
             Some (coord, ((moves.Current coord), moves)))                 
- 
     let lookupValue spiral (x, y) =
         spiral
         |> List.tryFind (fun ((_x, _y), _) ->
             x = _x && y = _y)
         |> function
             | Some ((_, _), n) -> Some n
-            | _ -> None
-              
+            | _ -> None             
     let sumNeighbours squares coord = 
         let neighbours =
             [ right; right>>above; above; above>>left; left; left>>below; below; below>>right ]
@@ -120,7 +118,6 @@ let spiralSums inputText =
         |> Seq.map (lookupValue squares)
         |> Seq.map (function Some n -> n | None -> 0)
         |> Seq.sum
-
     let first = (home, 1)     
     let spiralSquares () =
         let en = (spiralCoords ()).GetEnumerator()
@@ -131,14 +128,29 @@ let spiralSums inputText =
             let nextCoord = coords.Current
             let nextSquare = (nextCoord, sumNeighbours spiral nextCoord)  
             Some (List.head spiral, (nextSquare::spiral, coords)))
-            
-
     let input = int inputText
-
     spiralSquares ()    
         |> Seq.map snd
         |> Seq.find ((<) input)
         |> string
+
+
+ // Day 4
+
+let validPassphrases (lines : string[]) =
+    lines
+    |> Seq.map (fun line -> line.Split(' '))
+    |> Seq.filter(fun words -> words.Length = (Seq.distinct words |> Seq.length))
+    |> Seq.length
+    |> string
+
+let anagramFree (lines : string[]) =
+    lines
+    |> Seq.map (fun line -> line.Split(' '))
+    |> Seq.map (Array.map (Seq.toArray >> Array.sort))
+    |> Seq.filter(fun text -> text.Length = (Seq.distinct text |> Seq.length))
+    |> Seq.length
+    |> string
 
 
 [<EntryPoint>]
@@ -150,6 +162,8 @@ let main argv =
     | [| "2b" |] -> checksumQuotient (readLines "2b")
     | [| "3a"; input |] -> spiralDistance input
     | [| "3b"; input |] -> spiralSums input
+    | [| "4a" |] -> validPassphrases (readLines "4a")
+    | [| "4b" |] -> anagramFree (readLines "4a")
     | _ -> "Merry Christmas from F#!"
     |> printfn "%s"
     Console.ReadLine() |> ignore
