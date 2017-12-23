@@ -176,6 +176,39 @@ let jumpCount lines stranger =
     |> string
 
 
+// Day 6
+
+let reallocate (inputText : string) showLoopSize =
+    let redistribute =
+        let memory = 
+            inputText.Split(' ')
+            |> Array.map int
+        let hash () = String.concat ":" (memory |> Seq.map string)
+        (fun () ->
+            let rec spread index count =
+                if count = 0 then hash () else
+                let index = index % memory.Length
+                memory.[index] <- memory.[index] + 1
+                spread (index + 1) (count - 1)
+            let index, count = 
+                memory 
+                |> Seq.mapi (fun i n -> i, n)
+                |> Seq.maxBy snd
+            memory.[index] <- 0
+            spread (index + 1) count)
+    let rec findRepeat (hashHistory : string list) =
+        let hash = redistribute ()
+        match           
+            hashHistory |> Seq.mapi (fun i n -> i, n) |> Seq.tryFind (snd >> (=) hash)
+            with 
+            | Some (i, _) -> 
+                1 + if showLoopSize then i else List.length hashHistory 
+            | None -> findRepeat (hash::hashHistory)
+    findRepeat []
+    |> string
+
+             
+
 [<EntryPoint>]
 let main argv =
     match argv with
@@ -189,6 +222,8 @@ let main argv =
     | [| "4b" |] -> anagramFree (readLines "4a")
     | [| "5a" |] -> jumpCount (readLines "5a") false
     | [| "5b" |] -> jumpCount (readLines "5a") true
+    | [| "6a"; input |] -> reallocate input false
+    | [| "6b"; input |] -> reallocate input true
     | _ -> "Merry Christmas from F#!"
     |> printfn "%s"
     Console.ReadLine() |> ignore
