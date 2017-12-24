@@ -348,6 +348,68 @@ let streamScore text partOne =
     |> string
 
 
+// Day 10
+
+let knotHash (inputText : string) partOne = 
+
+    let literalLengths  = 
+        inputText.Split(',') 
+        |> Seq.map int
+        |> List.ofSeq
+
+    let binaryLengths =
+        List.concat [
+            inputText
+            |> Seq.map int
+            |> List.ofSeq;
+            [17; 31; 73; 47; 23]]
+        
+    let reverse elements current length =
+        let last = (current + length) - 1
+        let moded n = n % (Array.length elements)
+        for step in [0..(length / 2 - 1)] do
+            let a = moded (current + step)
+            let b = moded (last - step)
+            let temp = elements.[a]
+            elements.[a] <- elements.[b]
+            elements.[b] <- temp
+
+    let rec knot elements current skip lengths =
+        let moded n = n % (Array.length elements)
+        match lengths with
+        | [] -> (current, skip)
+        | length::tail ->
+            reverse elements (moded current) (moded length)
+            knot elements (current + length + skip) (skip + 1) tail
+    
+    let repeatKnot repCount elements lengths =
+        let rec repeat rCount (current, skip) =
+            match rCount with 
+            | 0 -> ()
+            | _ -> 
+                knot elements current skip lengths
+                |> repeat (rCount - 1) 
+        repeat repCount (0, 0)  
+        
+    let xor (ns : seq<int>) = Seq.reduce (^^^) ns
+  
+    let dense sparse =
+        sparse
+        |> Seq.chunkBySize 16
+        |> Seq.map (xor >> (fun n -> n.ToString("x2")))
+        |> String.concat "" 
+
+    let hash = [| 0..255 |]
+    if partOne then
+        knot hash 0 0 literalLengths |> ignore   
+        hash.[0] * hash.[1] |> string
+    else
+        repeatKnot 64 hash binaryLengths 
+        dense hash
+
+
+
+
 
 [<EntryPoint>]
 let main argv =
@@ -370,6 +432,9 @@ let main argv =
     | [| "8b" |] -> registerMax (readLines "8a") false
     | [| "9a" |] -> streamScore (readText "9a") true
     | [| "9b" |] -> streamScore (readText "9a") false
+    | [| "10a"; input |] -> knotHash input true
+    | [| "10b"; input |] -> knotHash input false
+
     | _ -> "Merry Christmas from F#!"
     |> printfn "%s"
     Console.ReadLine() |> ignore
