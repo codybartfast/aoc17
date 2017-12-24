@@ -267,7 +267,56 @@ let circusBalance inputLines =
         |> List.sortBy List.length
     theOne.Weight + (aPeer.CumulativeWeight - theOne.CumulativeWeight)
     |> string
+
  
+// Day 8
+
+type registerInsruction =
+    {Reg:string; Inc:int->int->int; Val:int; CReg:string; Cond:int->int->bool; CVal:int}
+let registerMax inputLines justAtEnd =
+    let instruction (line : string) = 
+        let fs = line.Split(' ')
+        {   Reg = fs.[0] 
+            Inc = match fs.[1] with "inc" -> (+) | "dec" -> (-)
+            Val = int <| fs.[2]
+            CReg = fs.[4]
+            Cond = match fs.[5] with
+                    | "<=" -> (<=)
+                    | "<" -> (<)
+                    | "==" -> (=)
+                    | "!=" -> (<>)
+                    | ">" -> (>)
+                    | ">=" -> (>=)
+            CVal = int <| fs.[6] }
+    let exec state instruction =
+        let i = instruction
+        let readReg name = 
+            match Map.tryFind name state with
+            | Some i -> i
+            | _ -> 0
+        if i.Cond (readReg i.CReg) i.CVal then
+            Map.add i.Reg (i.Inc (readReg i.Reg) i.Val) state
+        else state
+    let instructions = inputLines |> Seq.map instruction
+    let initialState = Map.empty<string, int>    
+    let highest state = 
+        state
+        |> Map.toSeq
+        |> Seq.map snd
+        |> Seq.max
+    
+    if justAtEnd then  
+        highest (Seq.fold exec initialState instructions)
+    else 
+        ((initialState, 0), instructions)
+        ||> Seq.fold (fun (state, maxHigh) instruction ->
+            let newState = exec state instruction
+            let newHigh = max maxHigh (highest newState)
+            (newState, newHigh))
+        |> snd
+    |> string 
+
+
 
 [<EntryPoint>]
 let main argv =
@@ -286,6 +335,8 @@ let main argv =
     | [| "6b"; input |] -> reallocate input true
     | [| "7a" |] -> circusBase (readLines "7a")
     | [| "7b" |] -> circusBalance (readLines "7a")
+    | [| "8a" |] -> registerMax (readLines "8a") true
+    | [| "8b" |] -> registerMax (readLines "8a") false
     | _ -> "Merry Christmas from F#!"
     |> printfn "%s"
     Console.ReadLine() |> ignore
