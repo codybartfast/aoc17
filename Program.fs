@@ -1,6 +1,7 @@
 ﻿open System
 open System.IO
 
+
 // Day 0
 
 let readLines q = 
@@ -207,7 +208,66 @@ let reallocate (inputText : string) showLoopSize =
     findRepeat []
     |> string
 
-             
+ 
+// Day 7
+
+open System.Text.RegularExpressions
+type circusDto = {Name:string; Weight:int; Supports: string list} 
+type circusProgram = {Name:string; Weight:int; CumulativeWeight:int; IsBalanced: bool; Supported: circusProgram list} 
+let circusParseLine line =
+        let m = 
+            Regex.Match(line, 
+                "^(?<name>\w+) \((?<weight>\d+)\)( ->( (?<supports>\w+),)* (?<supports>\w+))?")
+        { Name = m.Groups.["name"].Value
+          Weight = m.Groups.["weight"].Value |> int
+          Supports = [ for c in m.Groups.["supports"].Captures -> c.Value ] }          
+
+let circusBase inputLines = 
+    let dtos = inputLines |> Array.map circusParseLine 
+    let names = dtos |> Seq.map (fun r -> r.Name) |> Set.ofSeq
+    let supported = dtos |> Seq.collect (fun r -> r.Supports) |> Set.ofSeq
+    Set.difference names supported |> Seq.head
+
+let circusBalance inputLines =
+    let dtos = 
+        inputLines 
+        |> Seq.map circusParseLine 
+        |> Seq.map (fun dto -> dto.Name, dto)
+        |> Map.ofSeq
+    let rec fromDto (dto : circusDto) =
+        let supported = 
+            dto.Supports
+            |> List.map (fun name -> dtos.Item name)
+            |> List.map fromDto      
+        { Name = dto.Name
+          Weight = dto.Weight
+          Supported = supported
+          CumulativeWeight = 
+                dto.Weight + (supported |> Seq.sumBy (fun d -> d.CumulativeWeight))          
+          IsBalanced  = 
+                supported 
+                |> Seq.distinctBy (fun p -> p.CumulativeWeight)
+                |> Seq.length
+                |> (>) 2 }          
+    let all =  
+        let bottom = fromDto <| dtos.[circusBase inputLines]
+        let rec getAllSupported (prog : circusProgram) =
+            seq{ yield prog
+                 yield! prog.Supported |> Seq.collect getAllSupported }
+        bottom |> getAllSupported
+    let supporterOfTheOne = 
+        all 
+        |> Seq.find (fun p -> 
+            (not p.IsBalanced) 
+            && (p.Supported |> Seq.forall (fun s -> s.IsBalanced)))
+    let [[theOne]; aPeer::_] = 
+        supporterOfTheOne.Supported
+        |> List.groupBy (fun p -> p.CumulativeWeight)
+        |> List.map snd
+        |> List.sortBy List.length
+    theOne.Weight + (aPeer.CumulativeWeight - theOne.CumulativeWeight)
+    |> string
+ 
 
 [<EntryPoint>]
 let main argv =
@@ -224,6 +284,8 @@ let main argv =
     | [| "5b" |] -> jumpCount (readLines "5a") true
     | [| "6a"; input |] -> reallocate input false
     | [| "6b"; input |] -> reallocate input true
+    | [| "7a" |] -> circusBase (readLines "7a")
+    | [| "7b" |] -> circusBalance (readLines "7a")
     | _ -> "Merry Christmas from F#!"
     |> printfn "%s"
     Console.ReadLine() |> ignore
