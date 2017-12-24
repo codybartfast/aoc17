@@ -7,6 +7,9 @@ open System.IO
 let readLines q = 
     File.ReadAllLines(sprintf "./inputs/%s.txt" q)
 
+let readText q = 
+    File.ReadAllText(sprintf "./inputs/%s.txt" q)
+
 
 // Day 1
 
@@ -298,7 +301,7 @@ let registerMax inputLines justAtEnd =
             Map.add i.Reg (i.Inc (readReg i.Reg) i.Val) state
         else state
     let instructions = inputLines |> Seq.map instruction
-    let initialState = Map.empty<string, int>    
+    let registers = Map.empty<string, int>    
     let highest state = 
         state
         |> Map.toSeq
@@ -306,15 +309,43 @@ let registerMax inputLines justAtEnd =
         |> Seq.max
     
     if justAtEnd then  
-        highest (Seq.fold exec initialState instructions)
+        highest (Seq.fold exec registers instructions)
     else 
-        ((initialState, 0), instructions)
-        ||> Seq.fold (fun (state, maxHigh) instruction ->
-            let newState = exec state instruction
+        ((registers, 0), instructions)
+        ||> Seq.fold (fun (registers, maxHigh) instruction ->
+            let newState = exec registers instruction
             let newHigh = max maxHigh (highest newState)
             (newState, newHigh))
         |> snd
     |> string 
+
+
+// Day 9
+
+type StreamState = {Total:int; Depth:int; InGarbage:bool; GCount:int}
+let streamScore text partOne =
+    let rec score stream state =
+        match stream with
+        | '!'::_::tail -> score tail state  
+        | '<'::tail when not state.InGarbage 
+                        -> score tail {state with InGarbage = true}  
+        | '>'::tail -> score tail {state with InGarbage = false}  
+        | _::tail when state.InGarbage 
+                        -> score tail {state with GCount = state.GCount + 1 }
+        | '{'::tail -> score tail {
+                        state with 
+                            Total = state.Total + state.Depth + 1  
+                            Depth = state.Depth + 1 }                    
+        | '}'::tail -> score tail {
+                        state with 
+                            Depth = state.Depth - 1 }                         
+        | _ ::tail -> score tail state
+        | [] -> if partOne then state.Total else state.GCount
+
+    let state = {Total = 0; Depth = 0; InGarbage = false; GCount = 0}
+    let stream = [for c in text -> c]
+    score stream state
+    |> string
 
 
 
@@ -337,6 +368,8 @@ let main argv =
     | [| "7b" |] -> circusBalance (readLines "7a")
     | [| "8a" |] -> registerMax (readLines "8a") true
     | [| "8b" |] -> registerMax (readLines "8a") false
+    | [| "9a" |] -> streamScore (readText "9a") true
+    | [| "9b" |] -> streamScore (readText "9a") false
     | _ -> "Merry Christmas from F#!"
     |> printfn "%s"
     Console.ReadLine() |> ignore
