@@ -408,7 +408,90 @@ let knotHash (inputText : string) partOne =
         dense hash
 
 
+// Day 11
 
+let hexEd (inputText : string) partOne =
+    let path =        
+        //["nw"; "nw"; "nw9oo"; "sw"]
+        //["ne"; "ne"; "ne"]
+        //["ne"; "ne"; "sw"; "sw"]
+        //["ne"; "ne"; "s"; "s"]
+        //["se"; "sw"; "se"; "sw"; "sw"]
+        inputText.Split(',')
+
+    let vector compass =
+        match compass with
+        | "n" -> (0, 2)
+        | "ne" -> (1, 1)
+        | "se" -> (1, -1)
+        | "s" -> (0, -2)
+        | "sw" -> (-1, -1)
+        | "nw" -> (-1, 1)
+        | x -> failwith (sprintf "Don't know: %s" x)
+
+    let distance path = 
+        path
+        |> Seq.map vector   
+        |> Seq.reduce (fun (a, b) (A, B) -> (a + A, b + B))
+        |> (fun (a, b) -> (abs a), (abs b))
+        |> (fun (a, b) -> a + (max 0 (b - a)) / 2)
+        
+    let maxDistance path =
+        path
+        |> List.ofSeq
+        |> Seq.unfold(fun path ->
+            match path with
+            | [] -> None
+            | _::rest -> Some((distance path), rest))
+        |> Seq.max
+
+    if partOne then 
+        distance path |> string
+    else
+        maxDistance path |> string
+
+
+// Day 12
+
+type pipe = {Id:string; Peers:string list}
+let plumb (lines : string[]) partOne = 
+    let pass line =
+        let m = Regex.Match(line, "(?<id>\d+) <->([ ,]+(?<peer>\d+))+")
+        {   Id = m.Groups.["id"].Value
+            Peers = [ for cap in m.Groups.["peer"].Captures -> cap.Value] }
+    let pipes = 
+        lines 
+        |> Seq.map (pass >> (fun p -> (p.Id, p)))
+        |> Map.ofSeq   
+
+    let rec findGroup (walked : Set<string>) id =
+        match walked.Contains id with
+        | true -> walked
+        | _ -> List.fold findGroup (walked.Add id) (pipes.[id].Peers)
+    
+    let rec findGroups (unfound : Set<string>)  = 
+        seq{
+            let group = findGroup Set.empty<string> unfound.MinimumElement
+            let remaining = Set.difference unfound group
+            yield group
+            if not remaining.IsEmpty then
+                yield! findGroups remaining }
+            
+    let all = pipes |> Map.toSeq |> Seq. map fst |> Set.ofSeq
+    let groups = findGroups all
+    if partOne then  
+        Seq.head groups
+        |> Seq.length |> string
+    else
+        groups
+        |> Seq.length |> string
+
+
+
+    //if partOne then 
+    //    walk Set.empty<string> "0"
+    //    |> Set.count |> string
+    //else
 
 
 [<EntryPoint>]
@@ -434,6 +517,10 @@ let main argv =
     | [| "9b" |] -> streamScore (readText "9a") false
     | [| "10a"; input |] -> knotHash input true
     | [| "10b"; input |] -> knotHash input false
+    | [| "11a" |] -> hexEd (readText "11a") true
+    | [| "11b" |] -> hexEd (readText "11a") false
+    | [| "12a" |] -> plumb (readLines "12a") true
+    | [| "12b" |] -> plumb (readLines "12a") false
 
     | _ -> "Merry Christmas from F#!"
     |> printfn "%s"
