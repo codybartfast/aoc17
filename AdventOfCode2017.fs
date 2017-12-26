@@ -487,11 +487,50 @@ let plumb (lines : string[]) partOne =
         |> Seq.length |> string
 
 
+// Day 13
 
-    //if partOne then 
-    //    walk Set.empty<string> "0"
-    //    |> Set.count |> string
-    //else
+let firewall (lines : string[]) partOne = 
+    
+    let ranges = 
+        lines
+        |> Seq.map (fun line ->
+                let parts = Regex.Split(line, ": ")
+                (int parts.[0], int parts.[1]))
+
+    let level range time = 
+        let range = range - 1
+        match (time / range) % 2 with
+        | 0 -> time % range
+        | _ -> range - (time % range)
+
+    let caught range time =
+        level range time = 0
+    
+    let serverity delay ranges  = 
+        ranges
+        |> Seq.map (fun (depth, range) ->
+            if caught range (delay + depth) then            
+                depth * range
+            else 0)
+        |> Seq.sum
+
+    let catches delay ranges  =
+        ranges
+        |> Seq.map (fun (depth, range) ->
+            caught range (delay + depth))
+    
+    if partOne then 
+        serverity  0 ranges
+    else 
+        Seq.initInfinite id
+        |> Seq.map (fun delay -> 
+            (delay, 
+                catches delay ranges
+                |> Seq.exists id))
+        |> Seq.find (snd >> (=) false)
+        |> fst
+    |> string
+
 
 
 [<EntryPoint>]
@@ -521,6 +560,8 @@ let main argv =
     | [| "11b" |] -> hexEd (readText "11a") false
     | [| "12a" |] -> plumb (readLines "12a") true
     | [| "12b" |] -> plumb (readLines "12a") false
+    | [| "13a" |] -> firewall (readLines "13a") true
+    | [| "13b" |] -> firewall (readLines "13a") false
 
     | _ -> "Merry Christmas from F#!"
     |> printfn "%s"
