@@ -614,6 +614,96 @@ let duel startA filterA startB filterB partOne =
     |> string 
         
     
+// Day 17
+
+let permute (input : string) partOne =
+    let spin n (array : char[]) = 
+        let len = Array.length array
+        Array.copy array
+            |> Seq.iteri (fun i e -> array.[(i + n) % len] <- e)
+    let spinOfText text = (spin (int text))
+
+    let exchange a b (array : char[])=
+        let temp = array.[a]
+        array.[a] <- array.[b]
+        array.[b] <- temp
+    let exchangeOfText (text : string) =
+        let [|a;  b |] = Array.map int (text.Split('/'))
+        (exchange a b)
+        
+    let partner a b (array : char[]) = 
+        exchange (Array.findIndex ((=)a) array) (Array.findIndex ((=) b) array) array
+    let partnerOfText (text : string) =
+        let [|a;  b |] = Array.map char (text.Split('/'))
+        partner a b
+    
+    let commandOfText (text : string) =
+        let command = text.Substring(0, 1)
+        let paraText = text.Substring(1)
+        match command with
+        | "s" -> spinOfText paraText
+        | "x" -> exchangeOfText paraText
+        | "p" -> partnerOfText paraText
+        | _ -> failwith (sprintf "unexpected command: %s" command)
+   
+    let start = Array.map char [|97..112|] 
+    let working = Array.copy start
+
+    let commandTexts = input.Split(',')
+    let positionalCommands =  
+        commandTexts 
+        |> Array.filter (fun txt -> not (txt.StartsWith("p")))
+        |>  Array.map commandOfText 
+    let valueCommands =  
+        commandTexts 
+        |> Array.filter (fun txt -> txt.StartsWith("p"))
+        |>  Array.map commandOfText 
+ 
+    let positionDance () =
+        Array.map (fun cmnd -> cmnd working) positionalCommands |> ignore
+    let valueDance () =
+        Array.map (fun cmnd -> cmnd working) valueCommands |> ignore 
+    
+    let createPosTransform before after =
+       let transforms =
+            after
+            |> Array.map (fun chr -> 
+                (fun (arr : char[]) -> arr.[Array.findIndex ((=) chr) before]))
+       (fun arr -> Array.map (fun t -> t arr) transforms)
+
+    let createValTransform (before : char[]) (after : char[]) =
+       let transformChar char =
+            after.[Array.findIndex ((=) char) before]
+       (fun arr -> Array.map transformChar arr)
+
+    let applyTransform count transform array =
+        (array, seq{1..count})
+        ||> Seq.fold (fun arr _ -> transform arr) 
+
+    let applyBillion createTransform before after =
+        let transform = createTransform before after
+        let trans1k = createTransform before (applyTransform 1000 transform before)
+        let trans1m = createTransform before (applyTransform 1000 trans1k before)
+        applyTransform 1000 trans1m 
+
+    if partOne then
+        positionDance ()
+        valueDance ()
+        working |> String.Concat
+    else 
+        positionDance ()
+        let applyPositionalTrans = applyBillion createPosTransform start working
+
+        let intermediate = Array.copy working
+        
+        valueDance ()
+        let applyValueTrans = applyBillion createValTransform intermediate working
+
+        start
+        |> applyPositionalTrans
+        |> applyValueTrans
+        |> String.Concat
+
 
 [<EntryPoint>]
 let main argv =
@@ -650,6 +740,8 @@ let main argv =
         duel startA filterA startB filterB true
     | [| "15b"; startA; filterA; startB; filterB |] -> 
         duel startA filterA startB filterB false
+    | [| "16a" |] -> permute (readText "16a") true
+    | [| "16b" |] -> permute (readText "16a") false
 
     | _ -> "Merry Christmas from F#!"
     |> printfn "%s"
