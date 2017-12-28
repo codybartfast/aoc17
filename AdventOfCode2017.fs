@@ -215,6 +215,8 @@ let reallocate (inputText : string) showLoopSize =
 // Day 7
 
 open System.Text.RegularExpressions
+open System.Runtime.Serialization
+
 type circusDto = {Name:string; Weight:int; Supports: string list} 
 type circusProgram = {Name:string; Weight:int; CumulativeWeight:int; IsBalanced: bool; Supported: circusProgram list} 
 let circusParseLine line =
@@ -352,7 +354,7 @@ let streamScore text partOne =
 
 let knotHash (inputText : string) partOne = 
 
-    let literalLengths  = 
+    let literalLengths  () = 
         inputText.Split(',') 
         |> Seq.map int
         |> List.ofSeq
@@ -401,7 +403,7 @@ let knotHash (inputText : string) partOne =
 
     let hash = [| 0..255 |]
     if partOne then
-        knot hash 0 0 literalLengths |> ignore   
+        knot hash 0 0 (literalLengths ())|> ignore   
         hash.[0] * hash.[1] |> string
     else
         repeatKnot 64 hash binaryLengths 
@@ -532,6 +534,86 @@ let firewall (lines : string[]) partOne =
     |> string
 
 
+// Day 14
+
+let defrag inputText partOne =
+    let diskMap key =
+        [| 0..127 |]
+        |> Array.map (fun n -> knotHash (key + "-" + (string n)) false)
+        |> Array.map (fun text ->
+            text.ToCharArray()
+            |> Array.collect (fun chr -> 
+                let n = Convert.ToInt32(string chr, 16)
+                Convert.ToString(n, 2).PadLeft(4, '0').ToCharArray()
+                |> Array.map (Char.GetNumericValue >> int)))
+    
+    let rows = diskMap inputText
+
+    let findUsedCoord rows = (Array.head rows |> Array.findIndex ((=) 1), 0)
+
+    let getUsedNeighbours (rows : int [] []) (col, row) =
+        [(0, -1); (-1, 0); (1, 0); (0, 1); ]
+        |> List.map (fun (colOff, rowOff) -> (col + colOff, row + rowOff))
+        |> List.filter (fun (col, row) -> 
+            (col >= 0 && col < rows.[0].Length
+            && row >= 0 && row < rows.Length
+            && rows.[row].[col] = 1))        
+
+    let rec zeroGroup (rows : int [] []) (col, row) =
+        rows.[row].[col] <- 0
+        getUsedNeighbours rows (col, row)
+        |> Seq.iter (zeroGroup rows)
+
+    if partOne then 
+        rows
+        |> Seq.collect id
+        |> Seq.sum
+        |> string
+    else 
+    let rec countGroups rows count =
+        let rs = rows |> Array.skipWhile ((Seq.sum) >> ((=) 0))
+        match rs with 
+        | [||] -> count
+        | _ -> 
+            findUsedCoord rs |> (zeroGroup rs)
+            countGroups rs (1 + count)
+
+    countGroups rows 0
+    |> string
+
+
+// Day 15
+
+let duel startA filterA startB filterB partOne =
+    let [startA; filterA; startB; filterB] = 
+            List.map int64 [startA; filterA; startB; filterB] 
+
+    let generate fltr factor previous =
+        previous
+        |> Seq.unfold (fun previous ->
+            let value = (previous * factor) % 2147483647L
+            Some (value, value))
+        |> Seq.filter (fun n -> n % fltr = 0L)
+    
+    let mask = 65535L
+    let judgeSame (a, b) = (a &&& mask) = (b &&& mask)
+   
+    let judgeCount take seriesA seriesB =
+        Seq.zip seriesA seriesB
+        |> Seq.take take
+        |> Seq.filter judgeSame
+        |> Seq.length
+ 
+    let seriesA fltr = generate fltr 16807L  startA
+    let seriesB fltr = generate fltr 48271L  startB
+
+    if partOne then
+        judgeCount 40000000 (seriesA 1L) (seriesB 1L)
+    else
+        judgeCount 5000000 (seriesA filterA) (seriesB filterB)
+    |> string 
+        
+    
 
 [<EntryPoint>]
 let main argv =
@@ -562,6 +644,12 @@ let main argv =
     | [| "12b" |] -> plumb (readLines "12a") false
     | [| "13a" |] -> firewall (readLines "13a") true
     | [| "13b" |] -> firewall (readLines "13a") false
+    | [| "14a"; input |] -> defrag input true
+    | [| "14b"; input |] -> defrag input false
+    | [| "15a"; startA; filterA; startB; filterB |] -> 
+        duel startA filterA startB filterB true
+    | [| "15b"; startA; filterA; startB; filterB |] -> 
+        duel startA filterA startB filterB false
 
     | _ -> "Merry Christmas from F#!"
     |> printfn "%s"
