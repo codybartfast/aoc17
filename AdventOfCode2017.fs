@@ -215,7 +215,6 @@ let reallocate (inputText : string) showLoopSize =
 // Day 7
 
 open System.Text.RegularExpressions
-open System.Runtime.Serialization
 
 type circusDto = {Name:string; Weight:int; Supports: string list} 
 type circusProgram = {Name:string; Weight:int; CumulativeWeight:int; IsBalanced: bool; Supported: circusProgram list} 
@@ -705,6 +704,60 @@ let permute (input : string) partOne =
         |> String.Concat
 
 
+// Day 17
+type SLink = {Value: int; mutable Next: SLink}
+
+let spin input partOne =
+    let input = int input
+    
+    let createLock initialValue =
+        let rec initial = {Value = initialValue; Next = initial}
+        (1, initial)
+
+    let add value lock=
+        let (perimeter, ring) = lock
+        let added = { Value = value; Next = ring.Next }
+        ring.Next <- added;
+        (perimeter + 1, added);
+
+    let advance count lock = 
+        let rec iter count ring =
+            match count with
+            | 0 -> ring
+            | _ -> iter (count - 1) ring.Next
+        let (perimeter, ring) = lock
+        (perimeter, iter (count % perimeter) ring)
+
+    let advanceZero lock = 
+        let rec iter ring =
+            match ring.Value with
+            | 0 -> ring
+            | _ -> iter ring.Next
+        let (perimeter, ring) = lock
+        (perimeter, iter ring)
+
+    let lockValue (_, ring) = ring.Value 
+
+    let advanceAndAdd adv max =
+        ((createLock 0), [1..max])
+        ||> List.fold (fun lock value ->
+        advance adv lock 
+        |> add value)
+
+    if partOne then
+        advanceAndAdd input 2017
+        |> advance 1
+        |> lockValue
+    else 
+        // slow :(
+        advanceAndAdd input 50_000_000
+        |> advanceZero
+        |> advance 1
+        |> lockValue
+    |> string
+
+
+
 [<EntryPoint>]
 let main argv =
     match argv with
@@ -742,6 +795,8 @@ let main argv =
         duel startA filterA startB filterB false
     | [| "16a" |] -> permute (readText "16a") true
     | [| "16b" |] -> permute (readText "16a") false
+    | [| "17a"; input |] -> spin input true
+    | [| "17b"; input |] -> spin input false
 
     | _ -> "Merry Christmas from F#!"
     |> printfn "%s"
