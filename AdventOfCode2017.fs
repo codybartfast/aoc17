@@ -757,7 +757,99 @@ let spin input partOne =
     |> string
 
 
+// Day 18
 
+open System.Collections.Concurrent
+open System.Threading.Tasks
+open System.IO.Compression
+
+type assembleResult = Inst of int | Done of int64 
+let assemble lines (partOne : bool) = 
+    
+    let registers () =
+        let registers = Array.zeroCreate<int64> 16
+        let index (name : string) =
+            name |> char |> int |> (fun n -> n - (int 'a'))
+        ((fun name value -> registers.[index name] <- value)
+        , (fun name -> registers.[index name]))    
+
+    let instOfString set evalPara (inst : string) =
+        let op, param1Txt, param2Txt = 
+            let parts = inst.Split(' ')
+            parts.[0], parts.[1], if parts.Length > 2 then parts.[2] else ""
+        let getParam1, getParam2 = evalPara param1Txt, evalPara param2Txt
+
+        match op with
+        | "snd" -> (fun snd rcv i -> snd (getParam1 ()); Inst (i + 1))
+        | "set" -> (fun snd rcv i -> set param1Txt (getParam2 ()); Inst (i + 1))
+        | "add" -> (fun snd rcv i -> set param1Txt ((getParam1 ()) + (getParam2 ())); Inst (i + 1))
+        | "mul" -> (fun snd rcv i -> set param1Txt ((getParam1 ()) * (getParam2 ())); Inst (i + 1))
+        | "mod" -> (fun snd rcv i -> set param1Txt ((getParam1 ()) % (getParam2 ())); Inst (i + 1))
+        | "rcv" -> (fun snd rcv i -> (rcv (fun n -> set param1Txt n) i))
+        | "jgz" -> (fun snd rcv i ->
+            match (getParam1 ()) with
+            | 0L -> Inst (i + 1)
+            | _ -> Inst (i + int (getParam2 ())))
+        | _ -> failwith (sprintf "Unknown Instruction: %s" op)  
+    
+    let run id snd rcv = 
+        let set, get = registers ()
+        set "p" (int64 id)
+
+        let evalPara (para : string) : (unit -> int64) =
+            match para with
+            | "" -> (fun () -> failwith "Didn't expect to be called!")
+            | p when (p.Length > 1 || (char p |> int) < 64) -> (fun () -> int64 p)
+            | _ -> (fun () -> get para)
+        let instructions =
+            lines |> Array.map (instOfString set evalPara)
+        let rec performInstruction i = 
+            if (i < 0 || i >= Array.length instructions) then 0L
+            else
+            match instructions.[i] snd rcv i with
+            | Inst i -> performInstruction i
+            | Done r -> r
+        performInstruction 0 
+
+    let linkedMachines () =
+        let getRcv (queue : ConcurrentQueue<int64>)  = 
+            let rec iter () =
+                match queue.TryDequeue() with
+                | true, n -> n
+                | false, _ -> Task.Delay(0).Wait(); iter ()
+            (fun set instIdx -> set (iter ()); Inst (instIdx + 1))
+
+        let for1, for0 = ConcurrentQueue<int64>(), ConcurrentQueue<int64>()
+
+        let mutable count0, count1 = 0L, 0L       
+        let snd0 = (fun n -> count0 <- count0 + 1L; for1.Enqueue n)        
+        let snd1 = (fun n -> count1 <- count1 + 1L; for0.Enqueue n)
+
+        ((fun () -> run 0 snd0 (getRcv for0)),
+            (fun () -> run 1 snd1 (getRcv for1)),
+            (fun () -> count0, count1))
+        
+    if partOne then   
+        let sound, recover =
+            let mutable frequency = 0L
+            ((fun freq -> frequency <- freq)
+            , (fun sink i -> sink frequency; Done frequency))
+        run 0 sound recover |> string
+    else
+        let run0, run1, getCounts = linkedMachines ()
+        let task0, task1 = Task.Run(run0), Task.Run(run1)
+
+        let rec wait (t : int) prev = 
+            Task.Delay(1000).Wait()
+            let current = getCounts() 
+            let count0, count1 =  current
+            printfn "sec:%s  snd0:%s, snd1:%s"  
+                (t.ToString("n0")) (count0.ToString("n0")) (count1.ToString("n0"))
+            if current <> prev then wait (t + 1) current
+            else sprintf "Done: %s - %s" (count0.ToString("n0")) (count1.ToString("n0"))
+        wait 0 (getCounts())
+  
+  
 [<EntryPoint>]
 let main argv =
     match argv with
@@ -797,6 +889,9 @@ let main argv =
     | [| "16b" |] -> permute (readText "16a") false
     | [| "17a"; input |] -> spin input true
     | [| "17b"; input |] -> spin input false
+    | [| "18a" |] -> assemble (readLines "18a") true
+    | [| "18b" |] -> assemble (readLines "18a") false
+
 
     | _ -> "Merry Christmas from F#!"
     |> printfn "%s"
