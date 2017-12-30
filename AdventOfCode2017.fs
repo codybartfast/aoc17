@@ -850,6 +850,78 @@ let assemble lines (partOne : bool) =
         wait 0 (getCounts())
   
   
+// Day 19
+
+type Direction = Up | Down | Left | Right
+
+let tube (lines : string[]) partOne =
+
+    let rowCount = Array.length lines
+    let colCount = Seq.length lines.[0]
+    let lookup (row, col) = 
+        let inNetwork (row, col) =
+            row >= 0 && row < rowCount 
+                && col >= 0 && col < colCount
+        match inNetwork (row, col) with
+        | true -> lines.[row].[col]
+        | false -> ' '
+
+    let nextCoord (row, col) dir = 
+        match dir with
+        | Up -> (row - 1), col
+        | Down -> (row + 1), col
+        | Left -> row, col - 1
+        | Right -> row, col + 1
+
+    let possDirs = function
+        | Up -> [Up; Left; Right]
+        | Down -> [Left; Right; Down]
+        | Left -> [Left; Up; Down]
+        | Right -> [Up; Down; Right]
+
+    let chooseDir coord dir =
+        let nextDir = 
+            possDirs dir
+            |> List.map (fun testDir ->
+                let testSymbol =
+                    lookup (nextCoord coord testDir) 
+                match testSymbol, testDir with
+                | ' ', _ -> None
+                | '-', Up | '-', Down -> None
+                | '|', Left | '|', Right -> None
+                |  _, dir -> Some dir)
+            |> List.filter (function Some _ -> true | _ -> false)
+        match nextDir with
+        | [] -> None
+        | someDir::_ -> someDir
+
+    let nextDir coord dir  =
+        let symbol = lookup coord
+        match symbol, dir with
+        | '|', _ | '-', _ ->  Some dir
+        | _, dir -> chooseDir coord dir
+    
+    let rec step (coord, dir) =
+        seq{
+            yield lookup coord
+            let coord' = nextCoord coord dir
+            let dir' = nextDir coord' dir
+            match dir' with
+            | None -> yield lookup coord'
+            | Some d -> yield! step (coord', d)}
+
+    let steps = step ((0, 1), Down)
+
+    if partOne then 
+        steps
+        |> Seq.filter (fun chr -> 'A' <= chr && chr <= 'Z')
+        |> String.Concat
+    else
+        steps
+        |> Seq.length
+        |> string
+
+
 [<EntryPoint>]
 let main argv =
     match argv with
@@ -891,6 +963,8 @@ let main argv =
     | [| "17b"; input |] -> spin input false
     | [| "18a" |] -> assemble (readLines "18a") true
     | [| "18b" |] -> assemble (readLines "18a") false
+    | [| "19a" |] -> tube (readLines "19a") true
+    | [| "19b" |] -> tube (readLines "19a") false
 
 
     | _ -> "Merry Christmas from F#!"
