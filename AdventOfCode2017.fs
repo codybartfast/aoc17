@@ -922,6 +922,57 @@ let tube (lines : string[]) partOne =
         |> string
 
 
+// Day 20
+
+type Particle = {Id:int; P:int64*int64*int64; V:int64*int64*int64; A:int64*int64*int64}
+let particles lines partOne =
+    
+    let parseLine id (line : string) =
+        let parseVect (text : string) =
+            let [|x; y; z|] = text.Split(',') |> Array.map int64
+            (x, y, z)
+        let m = Regex.Match(line, 
+                    "p=<(?<vector>[^>]+)>, v=<(?<vector>[^>]+)>, a=<(?<vector>[^>]+)>")
+        let vects = 
+            [| for cap in m.Groups.["vector"].Captures -> cap.Value |]
+            |> Array.map parseVect
+        {Id = id; P = vects.[0]; V = vects.[1]; A = vects.[2]}
+   
+    let add (x, y, z) (x', y', z') = (x + x', y + y', z + z')
+
+    let update p =
+        let vel = add p.V p.A
+        { p with P = (add p.P vel); V = vel; }
+    
+    let removeCollisions particles =
+        particles
+        |> Seq.groupBy (fun p -> p.P) 
+        |> Seq.filter (snd >> Seq.length >> (=) 1)
+        |> Seq.collect snd
+
+    let magnitude (x, y, z) = (abs x) + (abs y) + (abs z)
+
+    let particles = Seq.mapi parseLine lines |> List.ofSeq
+
+    if partOne then
+        particles
+        |> Seq.groupBy (fun p -> magnitude p.A)
+        |> Seq.sortBy fst
+        |> Seq.head
+        |> snd 
+        |> Seq.exactlyOne
+        |> (fun s -> s.Id)
+        |> string
+    else
+        (Seq.ofList particles, seq{1..1000})
+        ||> Seq.fold (fun ps _ -> 
+            ps
+            |> removeCollisions 
+            |> Seq.map update )
+        |> Seq.length
+        |> string
+
+
 [<EntryPoint>]
 let main argv =
     match argv with
@@ -965,7 +1016,8 @@ let main argv =
     | [| "18b" |] -> assemble (readLines "18a") false
     | [| "19a" |] -> tube (readLines "19a") true
     | [| "19b" |] -> tube (readLines "19a") false
-
+    | [| "20a" |] -> particles (readLines "20a") true
+    | [| "20b" |] -> particles (readLines "20a") false
 
     | _ -> "Merry Christmas from F#!"
     |> printfn "%s"
