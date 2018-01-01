@@ -10,6 +10,10 @@ let readLines q =
 let readText q = 
     File.ReadAllText(sprintf "./inputs/%s.txt" q)
 
+let rec transpose = function
+    | (_::_)::_ as M -> List.map List.head M :: transpose (List.map List.tail M)
+    | _ -> []
+
 
 // Day 1
 
@@ -762,6 +766,8 @@ let spin input partOne =
 open System.Collections.Concurrent
 open System.Threading.Tasks
 open System.IO.Compression
+open System.Data
+open System.Security.Cryptography
 
 type assembleResult = Inst of int | Done of int64 
 let assemble lines (partOne : bool) = 
@@ -973,6 +979,67 @@ let particles lines partOne =
         |> string
 
 
+// Day 21
+
+let fractal lines partOne =
+    
+    let artOfText (text : string) =
+        text.Split('/')
+        |> Array.map (Seq.map id >> List.ofSeq)
+        |> List.ofArray
+
+    let original = ".#./..#/###"
+
+    let rulesOfLines lines =
+        let flip = List.rev
+        let ruleOfText (text : string) =
+            let [| iText; oText |] = Regex.Split(text, " => ")
+            (artOfText iText, artOfText oText)
+        let ruleVariations rule =
+            (rule, [ transpose; flip; transpose; flip; transpose; flip; transpose; flip; ])
+            ||> Seq.mapFold 
+                (fun (iArt, oArt) f -> 
+                    let ruleVariation = ((f iArt), id oArt)
+                    (ruleVariation, ruleVariation))
+            |> fst        
+        lines 
+        |> Seq.map (ruleOfText >> ruleVariations)
+        |> Seq.collect id
+        |> Map.ofSeq
+
+    let applyRule =
+        let rules = rulesOfLines lines
+        (fun art -> rules.[art])
+
+    let disemble size picture =
+        List.chunkBySize size picture
+        |> List.map (transpose >> (List.chunkBySize size) >> (List.map transpose))
+
+    let assemble pictures =
+        pictures
+        |> List.map (transpose >> (List.map List.concat))
+        |> List.collect id
+
+    let enhance art =
+        let size = if (List.length art) % 2 = 0 then 2 else 3
+        disemble size art
+        |> List.map (List.map applyRule)
+        |> assemble
+           
+    let rec repeat fn state times = 
+        match times with
+        | 0 -> state
+        | _ -> repeat fn (fn state) (times - 1)
+    
+    if partOne then 5 else 18
+    |> repeat enhance (artOfText original) 
+    |> Seq.collect id
+    |> Seq.filter ((=) '#')
+    |> Seq.length
+    |> string
+
+
+   
 [<EntryPoint>]
 let main argv =
     match argv with
@@ -1018,6 +1085,8 @@ let main argv =
     | [| "19b" |] -> tube (readLines "19a") false
     | [| "20a" |] -> particles (readLines "20a") true
     | [| "20b" |] -> particles (readLines "20a") false
+    | [| "21a" |] -> fractal (readLines "21a") true
+    | [| "21b" |] -> fractal (readLines "21a") false
 
     | _ -> "Merry Christmas from F#!"
     |> printfn "%s"
