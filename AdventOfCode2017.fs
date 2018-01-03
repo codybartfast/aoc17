@@ -846,12 +846,11 @@ let assemble lines (partOne : bool) =
         let rec wait (t : int) prev = 
             Task.Delay(1000).Wait()
             let current = getCounts() 
-            let count0, count1 =  current
             if current <> prev then wait (t + 1) current
-            else sprintf "Done: %s - %s" (count0.ToString("n0")) (count1.ToString("n0"))
-        wait 0 (getCounts())
-  
-  
+            else snd current
+        wait 0 (getCounts()) |> string
+        
+    
 // Day 19
 
 type Direction = Up | Down | Left | Right
@@ -1113,7 +1112,69 @@ let sporifica (lines : string[]) partOne =
     |> Seq.filter (fun v -> v.LastTreatment = Infected)
     |> Seq.length
     |> string
+    
 
+ // Day 23
+
+let conflagrate (inputLines : string[]) partOne =
+    
+    let newRegisters () = 
+        let array = Array.zeroCreate<int64>(8)
+        ((fun (name : string) value -> array.[int (char name) - int 'a'] <- value),
+            (fun (name : string)  ->  array.[int (char name) - int 'a']))
+
+    let programOfString set evalPara (inst : string) =
+        let op, param1Txt, param2Txt = 
+            let parts = inst.Split(' ')
+            parts.[0], parts.[1], if parts.Length > 2 then parts.[2] else ""
+        let getParam1, getParam2 = evalPara param1Txt, evalPara param2Txt
+
+        match op with
+        | "set" -> (fun i -> set param1Txt (getParam2 ()); op, Inst (i + 1))
+        | "sub" -> (fun i -> set param1Txt ((getParam1 ()) - (getParam2 ())); op, Inst (i + 1))
+        | "mul" -> (fun i -> set param1Txt ((getParam1 ()) * (getParam2 ())); op, Inst (i + 1))
+        | "jnz" -> (fun i -> 
+            op, match (getParam1 ()) with
+                | 0L -> Inst (i + 1)
+                | _ -> Inst (i + int (getParam2 ())))
+        | "mod" -> (fun i -> set param1Txt ((getParam1 ()) % (getParam2 ())); op, Inst (i + 1))
+        | _ -> failwith (sprintf "Unknown Instruction: %s" op)  
+
+    let run lines set get debug =
+        set "a" (if debug then 0L else 1L)
+        let evalPara (para : string) : (unit -> int64) =
+            match para with
+            | "" -> (fun () -> failwith "Didn't expect this!")
+            | num when (num.Length > 1 || (char num < '@')) -> (fun () -> int64 num)
+            | register -> (fun () -> get register)
+        let instructions =
+            lines |> Array.map (programOfString set evalPara)
+        let rec performInstruction i = 
+            seq{
+                if (i < 0 || i >= Array.length instructions) then 0L
+                else
+                let result = instructions.[i] i
+                yield result
+                match snd result with
+                | Inst i -> yield! performInstruction i
+                | Done r -> () }
+        performInstruction 0 
+    
+    let set, get = newRegisters ()
+
+    if partOne then
+        run inputLines set get true
+        |> Seq.filter (fst >> ((=) "mul"))
+        |> Seq.length
+        |> string 
+    else
+        let optimizedText = "set b 79; set c b; jnz a 2; jnz 1 5; mul b 100; sub b -100000; 
+            set c b; sub c -17000; set f 1; set d 2; set e 2; set g b; mod g d; jnz g 2; 
+            jnz 1 6; sub d -1 ; set g d; sub g b; jnz g -8; jnz f 2; sub h -1; set g b; 
+            sub g c; jnz g 2; jnz 1 3; sub b -17; jnz 1 -18"
+        let optimized = Regex.Split(optimizedText, ";\s*")
+        run optimized set get false |> Seq.length |> ignore
+        get "h" |> string
 
 [<EntryPoint>]
 let main argv =
@@ -1164,6 +1225,8 @@ let main argv =
     | [| "21b" |] -> fractal (readLines "21a") false
     | [| "22a" |] -> sporifica (readLines "22a") true
     | [| "22b" |] -> sporifica (readLines "22a") false
+    | [| "23a" |] -> conflagrate (readLines "23a") true
+    | [| "23b" |] -> conflagrate (readLines "23a") false
 
     | _ -> "Merry Christmas from F#!"
     |> printfn "%s"
