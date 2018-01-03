@@ -792,8 +792,8 @@ let assemble lines (partOne : bool) =
         | "rcv" -> (fun snd rcv i -> (rcv (fun n -> set param1Txt n) i))
         | "jgz" -> (fun snd rcv i ->
             match (getParam1 ()) with
-            | 0L -> Inst (i + 1)
-            | _ -> Inst (i + int (getParam2 ())))
+            | n when n > 0L -> Inst (i + int (getParam2 ()))
+            | _ -> Inst (i + 1) )
         | _ -> failwith (sprintf "Unknown Instruction: %s" op)  
     
     let run id snd rcv = 
@@ -847,8 +847,6 @@ let assemble lines (partOne : bool) =
             Task.Delay(1000).Wait()
             let current = getCounts() 
             let count0, count1 =  current
-            printfn "sec:%s  snd0:%s, snd1:%s"  
-                (t.ToString("n0")) (count0.ToString("n0")) (count1.ToString("n0"))
             if current <> prev then wait (t + 1) current
             else sprintf "Done: %s - %s" (count0.ToString("n0")) (count1.ToString("n0"))
         wait 0 (getCounts())
@@ -1104,8 +1102,10 @@ let sporifica (lines : string[]) partOne =
         virus
         |> Seq.unfold (fun v -> Some (v, advance treatment v))
 
-    let treatment = if partOne then simpleTreatment else evolvedTreatment
-    let count = if partOne then 10000 else 10000000
+    let treatment, count = 
+        match partOne with
+        | true -> simpleTreatment, 10000
+        | false -> evolvedTreatment, 10000000
 
     progression treatment (virusOfLines lines)
     |> Seq.skip 1
@@ -1113,7 +1113,7 @@ let sporifica (lines : string[]) partOne =
     |> Seq.filter (fun v -> v.LastTreatment = Infected)
     |> Seq.length
     |> string
-    
+
 
 [<EntryPoint>]
 let main argv =
