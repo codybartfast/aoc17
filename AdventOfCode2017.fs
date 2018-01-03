@@ -222,6 +222,7 @@ open System.Text.RegularExpressions
 
 type circusDto = {Name:string; Weight:int; Supports: string list} 
 type circusProgram = {Name:string; Weight:int; CumulativeWeight:int; IsBalanced: bool; Supported: circusProgram list} 
+
 let circusParseLine line =
         let m = 
             Regex.Match(line, 
@@ -237,6 +238,8 @@ let circusBase inputLines =
     Set.difference names supported |> Seq.head
 
 let circusBalance inputLines =
+
+
     let dtos = 
         inputLines 
         |> Seq.map circusParseLine 
@@ -417,11 +420,6 @@ let knotHash (inputText : string) partOne =
 
 let hexEd (inputText : string) partOne =
     let path =        
-        //["nw"; "nw"; "nw9oo"; "sw"]
-        //["ne"; "ne"; "ne"]
-        //["ne"; "ne"; "sw"; "sw"]
-        //["ne"; "ne"; "s"; "s"]
-        //["se"; "sw"; "se"; "sw"; "sw"]
         inputText.Split(',')
 
     let vector compass =
@@ -459,6 +457,7 @@ let hexEd (inputText : string) partOne =
 // Day 12
 
 type pipe = {Id:string; Peers:string list}
+
 let plumb (lines : string[]) partOne = 
     let pass line =
         let m = Regex.Match(line, "(?<id>\d+) <->([ ,]+(?<peer>\d+))+")
@@ -765,11 +764,10 @@ let spin input partOne =
 
 open System.Collections.Concurrent
 open System.Threading.Tasks
-open System.IO.Compression
-open System.Data
-open System.Security.Cryptography
+open System.Xml
 
 type assembleResult = Inst of int | Done of int64 
+
 let assemble lines (partOne : bool) = 
     
     let registers () =
@@ -983,23 +981,23 @@ let particles lines partOne =
 
 let fractal lines partOne =
     
+    let original = ".#./..#/###"
+
     let artOfText (text : string) =
         text.Split('/')
         |> Array.map (Seq.map id >> List.ofSeq)
         |> List.ofArray
 
-    let original = ".#./..#/###"
-
     let rulesOfLines lines =
         let flip = List.rev
         let ruleOfText (text : string) =
-            let [| iText; oText |] = Regex.Split(text, " => ")
-            (artOfText iText, artOfText oText)
+            let [| input; output |] = Regex.Split(text, " => ")
+            (artOfText input, artOfText output)
         let ruleVariations rule =
             (rule, [ transpose; flip; transpose; flip; transpose; flip; transpose; flip; ])
             ||> Seq.mapFold 
-                (fun (iArt, oArt) f -> 
-                    let ruleVariation = ((f iArt), id oArt)
+                (fun (iputArt, outputArt) transform -> 
+                    let ruleVariation = ((transform iputArt), id outputArt)
                     (ruleVariation, ruleVariation))
             |> fst        
         lines 
@@ -1039,7 +1037,84 @@ let fractal lines partOne =
     |> string
 
 
-   
+// Day 22
+
+type Health = Clean | Weakened | Infected | Flagged
+type Virus = {Pos: int * int; Dir: Direction; Colony: Map<int * int, Health>; LastTreatment : Health}
+
+let sporifica (lines : string[]) partOne =
+    //let lines = [| "..#"; "#.."; "..." |]
+    
+    let virusOfLines (lines : string[])  =
+        let offset = Array.length lines / 2        
+        let colony = 
+            lines
+            |> Seq.mapi (fun row line ->
+                line 
+                |> Seq.mapi (fun col chr -> (col, chr))
+                |> Seq.filter (fun (_, chr) -> chr = '#')
+                |> Seq.map (fun (col, _) ->
+                    ((col - offset, offset - row), Infected)))
+            |> Seq.collect id
+            |> Map.ofSeq
+        { Pos = (0, 0); Dir = Up; Colony = colony; LastTreatment = Clean }
+    
+    let turnLeft =  function
+        | Up -> Left | Left -> Down | Down -> Right | Right -> Up
+
+    let turnRight = function
+        | Up -> Right | Right -> Down | Down -> Left | Left -> Up
+
+    let reverse = function
+        | Up -> Down | Down -> Up | Left -> Right | Right -> Left
+
+    let move (x, y) = function
+        | Up -> x, y + 1
+        | Down -> x, y - 1
+        | Left -> x - 1, y
+        | Right -> x + 1, y
+
+    let turn = function
+        | Clean -> turnLeft | Weakened -> id | Infected -> turnRight | Flagged -> reverse
+
+    let simpleTreatment = function
+        | Clean -> Infected | Infected -> Clean | _ -> failwith "Didn't expect this"
+
+    let evolvedTreatment = function
+        | Clean -> Weakened | Weakened -> Infected | Infected -> Flagged | Flagged -> Clean
+
+    let lookupHealth virus =
+        match virus.Colony.TryFind virus.Pos with
+        | Some h -> h
+        | None -> Clean
+
+    let advance treatment virus =
+        let health = lookupHealth virus
+        let newDir = (turn health) virus.Dir
+        let newHealth = treatment health
+        {   Pos = move virus.Pos newDir
+            Dir = newDir
+            Colony = 
+                match newHealth with
+                | Clean -> virus.Colony.Remove virus.Pos
+                | _ -> virus.Colony.Add (virus.Pos, newHealth) 
+            LastTreatment = newHealth }
+
+    let progression treatment (virus : Virus) =
+        virus
+        |> Seq.unfold (fun v -> Some (v, advance treatment v))
+
+    let treatment = if partOne then simpleTreatment else evolvedTreatment
+    let count = if partOne then 10000 else 10000000
+
+    progression treatment (virusOfLines lines)
+    |> Seq.skip 1
+    |> Seq.take count
+    |> Seq.filter (fun v -> v.LastTreatment = Infected)
+    |> Seq.length
+    |> string
+    
+
 [<EntryPoint>]
 let main argv =
     match argv with
@@ -1087,6 +1162,8 @@ let main argv =
     | [| "20b" |] -> particles (readLines "20a") false
     | [| "21a" |] -> fractal (readLines "21a") true
     | [| "21b" |] -> fractal (readLines "21a") false
+    | [| "22a" |] -> sporifica (readLines "22a") true
+    | [| "22b" |] -> sporifica (readLines "22a") false
 
     | _ -> "Merry Christmas from F#!"
     |> printfn "%s"
