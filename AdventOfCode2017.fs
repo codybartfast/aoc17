@@ -418,40 +418,39 @@ let knotHash (inputText : string) partOne =
 
 // Day 11
 
-let hexEd (inputText : string) partOne =
-    let path =        
-        inputText.Split(',')
+let hex (input : string) partOne =
 
-    let vector compass =
-        match compass with
-        | "n" -> (0, 2)
-        | "ne" -> (1, 1)
-        | "se" -> (1, -1)
-        | "s" -> (0, -2)
-        | "sw" -> (-1, -1)
-        | "nw" -> (-1, 1)
-        | x -> failwith (sprintf "Don't know: %s" x)
+    let steps = input.Split(',')    
+    
+    let vector = function
+        | "n"  -> 0, 2
+        | "ne" -> 1, 1
+        | "se" -> 1, -1
+        | "s"  -> 0, -2
+        | "sw" -> -1, -1
+        | "nw" -> -1, 1
+        | _ -> failwith "oops"
 
-    let distance path = 
-        path
-        |> Seq.map vector   
-        |> Seq.reduce (fun (a, b) (A, B) -> (a + A, b + B))
-        |> (fun (a, b) -> (abs a), (abs b))
-        |> (fun (a, b) -> a + (max 0 (b - a)) / 2)
-        
-    let maxDistance path =
-        path
-        |> List.ofSeq
-        |> Seq.unfold(fun path ->
-            match path with
-            | [] -> None
-            | _::rest -> Some((distance path), rest))
-        |> Seq.max
+    let vectors = Array.map vector steps
 
-    if partOne then 
-        distance path |> string
+    let positions =
+        ((0, 0), vectors)
+        ||> Seq.mapFold (fun (posA, posB) (vecA, vecB) ->
+            let position = posA + vecA, posB + vecB
+            (position, position))
+        |> fst
+
+    let distance (a, b) =
+        let a, b = abs a, abs b
+        a + (max 0 ((b - a)/2))
+
+    let distances = positions |> Seq.map distance
+
+    if partOne then
+        Seq.last distances
     else
-        maxDistance path |> string
+        Seq.max distances
+    |> string
 
 
 // Day 12
@@ -1176,6 +1175,67 @@ let conflagrate (inputLines : string[]) partOne =
         run optimized set get false |> Seq.length |> ignore
         get "h" |> string
 
+
+// Day 24
+
+type Bridge = { Free : int; Strength : int; Used : (int * int) list; Unused : Set<int * int> }
+
+let bridge (lines : string []) partOne = 
+    
+    let portA, portB = fst, snd
+    let fits pins part = portA part = pins || portB part = pins
+    let matches pins parts = 
+        parts
+        |> Seq.filter (fits pins)
+        |> List.ofSeq
+    let freePort pins part = 
+        if portA part = pins then portB part
+        else if portB part = pins then portA part
+        else failwith "Didn't expect this"
+    let strength part = portA part + portB part
+
+    let addPart bridge part =
+        let b = bridge
+        {   Free = freePort b.Free part
+            Strength = b.Strength + strength part
+            Used = part::b.Used
+            Unused = b.Unused.Remove part }  
+
+    let rec build bridge =
+        seq{    
+            let matches = matches bridge.Free bridge.Unused
+            match matches.Length with
+            | 0 -> yield bridge;
+            | _ -> 
+            yield!
+                matches 
+                |> Seq.map (addPart bridge)
+                |> Seq.map build
+                |> Seq.collect id}
+    
+    let parts (lines : string[]) =
+        lines 
+        |> Array.map(fun line -> 
+            let parts = line.Split('/')
+            (int parts.[0], int parts.[1]))
+        |> Set.ofArray
+
+    let bridges = build { Free = 0; Strength = 0; Used = []; Unused = (parts lines)}
+
+    if partOne then 
+        bridges
+        |> Seq.map (fun b -> b.Strength)
+        |> Seq.max
+    else 
+        bridges
+        |> Seq.groupBy (fun b -> b.Used.Length)
+        |> Seq.maxBy fst
+        |> snd
+        |> Seq.map (fun b -> b.Strength)
+        |> Seq.max
+    |> string
+        
+
 [<EntryPoint>]
 let main argv =
     match argv with
@@ -1199,8 +1259,8 @@ let main argv =
     | [| "9b" |] -> streamScore (readText "9a") false
     | [| "10a"; input |] -> knotHash input true
     | [| "10b"; input |] -> knotHash input false
-    | [| "11a" |] -> hexEd (readText "11a") true
-    | [| "11b" |] -> hexEd (readText "11a") false
+    | [| "11a" |] -> hex (readText "11a") true
+    | [| "11b" |] -> hex (readText "11a") false
     | [| "12a" |] -> plumb (readLines "12a") true
     | [| "12b" |] -> plumb (readLines "12a") false
     | [| "13a" |] -> firewall (readLines "13a") true
@@ -1227,7 +1287,8 @@ let main argv =
     | [| "22b" |] -> sporifica (readLines "22a") false
     | [| "23a" |] -> conflagrate (readLines "23a") true
     | [| "23b" |] -> conflagrate (readLines "23a") false
-
+    | [| "24a" |] -> bridge (readLines "24a") true
+    | [| "24b" |] -> bridge (readLines "24a") false
     | _ -> "Merry Christmas from F#!"
     |> printfn "%s"
     Console.ReadLine() |> ignore
