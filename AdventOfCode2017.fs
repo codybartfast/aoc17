@@ -1234,6 +1234,64 @@ let bridge (lines : string []) partOne =
         |> Seq.map (fun b -> b.Strength)
         |> Seq.max
     |> string
+
+
+// Day 25
+
+type Tape (size) = 
+    let mutable cursor = 0
+    let array = Array.init (2 * size) (fun _ -> false)
+    member t.Read () = array.[size + cursor]
+    member t.Write n = array.[size + cursor] <- n
+    member t.Left n = cursor <- cursor - n
+    member t.Right n = cursor <- cursor + n
+    member t.Checksum () = array |> Seq.filter id |> Seq.length
+
+type States = A | B | C | D | E | F
+
+let turing =    
+
+    let stateA (tape : Tape) = 
+        match tape.Read () with
+        | false -> tape.Write true; tape.Right 1; B
+        | true -> tape.Write false; tape.Left 1; E
+
+    let stateB (tape : Tape) = 
+        match tape.Read () with
+        | false -> tape.Write true; tape.Left 1; C
+        | true -> tape.Write false; tape.Right 1; A
+
+    let stateC (tape : Tape) = 
+        match tape.Read () with
+        | false -> tape.Write true; tape.Left 1; D
+        | true -> tape.Write false; tape.Right 1; C
+
+    let stateD (tape : Tape) = 
+        match tape.Read () with
+        | false -> tape.Write true; tape.Left 1; E
+        | true -> tape.Write false; tape.Left 1; F
+
+    let stateE (tape : Tape) = 
+        match tape.Read () with
+        | false -> tape.Write true; tape.Left 1; A
+        | true -> tape.Write true; tape.Left 1; C
+
+    let stateF (tape : Tape) = 
+        match tape.Read () with
+        | false -> tape.Write true; tape.Left 1; E
+        | true -> tape.Write true; tape.Right 1; A
+
+    let mapState = function
+    | A -> stateA | B -> stateB | C -> stateC
+    | D -> stateD | E -> stateE | F -> stateF
+
+    let rec run (tape : Tape) state steps maxSteps =
+        match steps = maxSteps with
+        | true -> tape.Checksum ()
+        | _  -> run tape ((mapState state) tape) (steps + 1) maxSteps
+
+    run (new Tape(10000)) A 0 12386363
+    |> string
         
 
 [<EntryPoint>]
@@ -1289,6 +1347,7 @@ let main argv =
     | [| "23b" |] -> conflagrate (readLines "23a") false
     | [| "24a" |] -> bridge (readLines "24a") true
     | [| "24b" |] -> bridge (readLines "24a") false
+    | [| "25" |] -> turing
     | _ -> "Merry Christmas from F#!"
     |> printfn "%s"
     Console.ReadLine() |> ignore
